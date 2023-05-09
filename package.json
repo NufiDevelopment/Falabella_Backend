@@ -1,0 +1,24 @@
+{
+  "name": "FalabellaBackend",
+  "version": "1.0.0",
+  "description": "FalabellaBackend",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon --ignore logs/ --ignore temp/"
+  },
+  "author": "Miguel Aragon",
+  "license": "ISC",
+  "dependencies": {
+    "async": "^3.2.4",
+    "body-parser": "^1.19.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.17.1",
+    "helmet": "^4.1.1",
+    "moment": "^2.27.0",
+    "mssql": "^5.1.0",
+    "request": "^2.88.2",
+    "uuid": "^9.0.0"
+  }
+}
