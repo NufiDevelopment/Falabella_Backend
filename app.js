@@ -15,6 +15,7 @@ app.use(express.urlencoded({limit: '15mb', extended: true }));
 app.use(bodyParser.urlencoded({ limit: "15mb", extended: true}));
 app.use(bodyParser.json({ limit: "15mb" }));
 app.use('/uploads', express.static('uploads'));
+app.use('/', express.static('public'));
 
 app.get("/", function(req, res) {
     res.send(`API ${process.env.APP_NAME}`);
