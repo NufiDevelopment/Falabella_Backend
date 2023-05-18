@@ -4,13 +4,16 @@ const api = require("express").Router(),
     {v1: uuidv1 } = require('uuid'),
     DB = require("../utils/DB"),
     Nufi = require("../utils/Nufi"),
-    Utilities = require("../utils/Utilities");
+    Utilities = require("../utils/Utilities"),
+    CATALOGO_SEXO = {'H':'Hombre', 'M': 'Mujer'},
+    CATALOGO_ESTADO = {'AS': 'Aguascalientes', 'BC': 'Baja California', 'BS': 'Baja California Sur', 'CC': 'Campeche', 'CL': 'Coahuila de Zaragoza', 'CM': 'Colima', 'CS': 'Chiapas', 'CH': 'Chihuahua', 'DF': 'Distrito Federal', 'DG': 'Durango', 'GT': 'Guanajuato', 'GR': 'Guerrero', 'HG': 'Hidalgo', 'JC': 'Jalisco', 'MC': 'México', 'MN': 'Michoacán de Ocampo', 'MS': 'Morelos', 'NT': 'Nayarit', 'NL': 'Nuevo León', 'OC': 'Oaxaca', 'PL': 'Puebla', 'QT': 'Querétaro', 'QR': 'Quintana Roo', 'SP': 'San Luis Potosí', 'SL': 'Sinaloa', 'SR': 'Sonora', 'TC': 'Tabasco', 'TS': 'Tamaulipas', 'TL': 'Tlaxcala', 'VZ': 'Veracruz de Ignacio de la Llave', 'YN': 'Yucatán', 'ZS': 'Zacatecas'};
     
 api.post("/crear", function(req, res) {
     const numero = req.body.numero || "",
         correo = req.body.correo || "",
         uuid = uuidv1();
 
+    req.Log(`Crear Registro (DB)`, `Insertando registro`);
     DB.insert({
             uuid: uuid,
             fecha_creacion: moment().utc().format("YYYY-MM-DD HH:mm:ss"),
@@ -19,10 +22,12 @@ api.post("/crear", function(req, res) {
             estatus: "registrado"
         }, DB.table.REGISTROS)
         .then((id) => {
+            req.Log(`Crear Registro (DB)`, `Registro insertado con id: ${id}`);
             res.response("success", "Registro insertado", {uuid}, 200);
         })
         .catch((err) => {
-            res.response("error", err.message || err, null, 400);
+            req.Log(`Crear Registro (DB) Error`, err.message || err);
+            res.response("error", `Error al crear registro, porfavor intentelo nuevamente.`, null, 400);
         });
 });
 
@@ -33,6 +38,7 @@ api.post("/evento", obtenerRegistro, function(req, res) {
     if(!evento) return res.response("error", "Campo evento requerido", null);
     if(!identificador) return res.response("error", "Campo identificador requerido", null);
 
+    req.Log(`Evento (DB)`, `Insertando evento`);
     DB.insert({
             fecha_creacion: moment().utc().format("YYYY-MM-DD HH:mm:ss"),
             registro: req.user.id,
@@ -40,22 +46,27 @@ api.post("/evento", obtenerRegistro, function(req, res) {
             identificador: identificador
         }, DB.table.LOGS)
         .then((id) => {
+            req.Log(`Evento (DB)`, `Evento insertado`);
             res.response("success", "Evento insertado", {id}, 200);
         })
         .catch((err) => {
-            res.response("error", err.message || err, null, 400);
+            req.Log(`Evento (DB) Error`, err.message || err);
+            res.response("error",`Error insertando evento`, null, 400);
         });
 });
 
 api.get("/estatus", obtenerRegistro, function(req, res) {
-    res.response("success", "Registro obtenido", req.user);
+    let _user = req.user;
+    delete _user.id;
+    res.response("success", "Registro obtenido", _user);
 });
 
 api.post("/ocr_frente", obtenerRegistro, function(req, res) {
     const base64 = req.body.base64 || "";
 
-    Nufi.INEfrente(base64)
+    Nufi.INEfrente(base64, req)
         .then( ocr => {
+            req.Log(`OCR Frente (DB)`, `Actualizando registro con respuesta de OCR frente`);
             return DB.update({
                 estatus: "credencial_frente",
                 rfc: ocr?.rfc,
@@ -63,53 +74,62 @@ api.post("/ocr_frente", obtenerRegistro, function(req, res) {
             }, DB.table.REGISTROS, `id=${req.user.id}`)
         })
         .then( updated => {
+            req.Log(`OCR Frente (DB)`, `Registro actualizado`);
             res.response("success", "Credencial Procesada", null, 200);
         })
         .catch((err) => {
-            res.response("error", err.message || err, null, 400);
+            req.Log(`OCR Frente (DB) Error`, err.message || err);
+            res.response("error", `Error actualizando registro, porfavor intentelo nuevamente `, null, 400);
         });
 });
 
 api.post("/ocr_reverso", obtenerRegistro, function(req, res) {
     const base64 = req.body.base64 || "";
 
-    Nufi.INEreverso(base64)
+    Nufi.INEreverso(base64, req)
         .then( ocr => {
+            req.Log(`OCR Reverso (DB)`, `Actualizando registro con respuesta de OCR reverso`);
             return DB.update({
                 estatus: "credencial_reverso",
                 json_ocr_reverso: Utilities.LimitarLogDB(ocr, 2000)
             }, DB.table.REGISTROS, `id=${req.user.id}`)
         })
         .then( updated => {
+            req.Log(`OCR Reverso (DB)`, `Registro actualizado`);
             res.response("success", "Credencial Procesada", null, 200);
         })
         .catch((err) => {
-            res.response("error", err.message || err, null, 400);
+            req.Log(`OCR Reverso (DB) Error`, err.message || err);
+            res.response("error", `Error actualizando registro, porfavor intentelo nuevamente `, null, 400);
         });
 });
 
 api.post("/datos_personales", obtenerRegistro, function(req, res) {
     const { nombre, apellido_paterno, apellido_materno, fecha_nacimiento, sexo, estado }  = req.body,
-        fecha_nacimiento_date = moment(fecha_nacimiento, 'DD/MM/YYYY');
+        fecha_nacimiento_date = moment(fecha_nacimiento, 'DD/MM/YYYY'),
+        sexo_code = Object.keys(CATALOGO_SEXO).find(key => CATALOGO_SEXO[key] === sexo),
+        estado_code = Object.keys(CATALOGO_ESTADO).find(key => CATALOGO_ESTADO[key] === estado);
 
     if(!nombre) return res.response("error", "Campo nombre requerido", null);
     if(!apellido_paterno) return res.response("error", "Campo apellido_paterno requerido", null);
     if(!apellido_materno) return res.response("error", "Campo apellido_materno requerido", null);
     if(!fecha_nacimiento) return res.response("error", "Campo fecha_nacimiento requerido", null);
     if(!sexo) return res.response("error", "Campo sexo requerido", null);
+    if(!sexo_code) return res.response("error", "Campo sexo no válido en catálogo", null);
     if(!estado) return res.response("error", "Campo estado requerido", null);
+    if(!estado_code) return res.response("error", "Campo estado no válido en catálogo", null);
     if(!fecha_nacimiento_date.isValid()) return res.response("error", "Fecha de nacimiento no válida", null);
-
     let fecha_string = fecha_nacimiento_date.format("YYYY-MM-DD");
 
-    Nufi.calcularCURP(nombre, apellido_paterno, apellido_materno, fecha_string, sexo, estado)
+    Nufi.calcularCURP(nombre, apellido_paterno, apellido_materno, fecha_string, sexo_code, estado_code, req)
         .then((curp_data) => {
-            return Nufi.calcularRFC(nombre, apellido_paterno, apellido_materno, fecha_string)
+            return Nufi.calcularRFC(nombre, apellido_paterno, apellido_materno, fecha_string, req)
                 .then((rfc_data) => {
                     return [curp_data, rfc_data];
                 });
         })
         .then( ([curp_data, rfc_data]) => {
+            req.Log(`DB`, `Actualizando registro con id: ${req.user.id}`);
             return DB.update({
                     nombre: nombre,
                     apellido_paterno: apellido_paterno,
@@ -123,28 +143,32 @@ api.post("/datos_personales", obtenerRegistro, function(req, res) {
                 }, DB.table.REGISTROS, `id=${req.user.id}`)
         })
         .then( updated => {
+            req.Log(`DB`, `Registro actualizado`);
             res.response("success", "Datos actualizados", null, 200);
         })
         .catch((err) => {
+            req.Log(`DB Error`, err.message || err);
             res.response("error", err.message || err, null, 400);
         });
 });
-
 
 api.post("/curp_rfc", obtenerRegistro, function(req, res) {
     const { curp, rfc }  = req.body;
     if(!curp) return res.response("error", "Campo curp requerido", null);
     if(!rfc) return res.response("error", "Campo rfc requerido", null);
     
+    req.Log(`DB`, `Actualizando registro con id: ${req.user.id}`);
     DB.update({
             curp: curp,
             rfc: rfc,
             estatus: "curp_rfc_validado"
         }, DB.table.REGISTROS, `id=${req.user.id}`)
         .then( updated => {
+            req.Log(`DB`, `Registro actualizado`);
             res.response("success", "Datos actualizados", null, 200);
         })
         .catch((err) => {
+            req.Log(`DB Error`, err.message || err);
             res.response("error", err.message || err, null, 400);
         });
 });
@@ -158,7 +182,8 @@ api.post("/domicilio", obtenerRegistro, function(req, res) {
     if(!colonia) return res.response("error", "Campo colonia requerido", null);
     if(!municipio) return res.response("error", "Campo municipio requerido", null);
     if(!estado) return res.response("error", "Campo estado requerido", null);
-        
+    
+    req.Log(`DB`, `Actualizando registro con id: ${req.user.id}`);
     DB.update({
             calle: calle,
             numero_exterior: numero_exterior,
@@ -170,16 +195,19 @@ api.post("/domicilio", obtenerRegistro, function(req, res) {
             estatus: "domicilio"
         }, DB.table.REGISTROS, `id=${req.user.id}`)
         .then( updated => {
+            req.Log(`DB`, `Registro actualizado`);
             res.response("success", "Datos actualizados", null, 200);
         })
         .catch((err) => {
+            req.Log(`DB`, `Error al actualizar registro: ${err.message || err}`);
             res.response("error", err.message || err, null, 400);
         });
 });
 
 api.post("/enviar_otp", obtenerRegistro, function(req, res) {
-    Nufi.enviarOTP(req.user.numero)
+    Nufi.enviarOTP(req.user.numero, req)
         .then((otp) => {
+            req.Log(`DB`, `Insertar registro ${JSON.stringify(otp)}`);
             return DB.insert({
                     fecha_creacion: moment().utc().format("YYYY-MM-DD HH:mm:ss"),
                     identificador: otp.identificador,
@@ -188,10 +216,12 @@ api.post("/enviar_otp", obtenerRegistro, function(req, res) {
                     estatus: "sin_verificar"
                 }, DB.table.OTP)
         })
-        .then( inserted => {
+        .then( id => {
+            req.Log(`DB`, `Registro insertado con id: ${id}`);
             res.response("success", "OTP enviado", null, 200);
         })
         .catch((err) => {
+            req.Log(`DB`, `Error al actualizar registro: ${err.message || err}`);
             res.response("error", err.message || err, null, 400);
         });
 });
@@ -201,19 +231,20 @@ api.post("/validar_otp", obtenerRegistro, function(req, res) {
     const { codigo }  = req.body;
     if(!codigo) return res.response("error", "Campo codigo requerido", null);
 
+    req.Log(`DB`, `Obteniendo registro OTP de usuario: ${req.user.id}`);
     DB.query(`SELECT TOP 1 * FROM ${DB.table.OTP} WHERE registro='${req.user.id}' ORDER BY id DESC`)
         .then((rows) => {
             if(rows.length == 0 ) return Promise.reject("Error registro de verificacion no encontrado");
             const row = rows[0];
 
-            return Nufi.validarOTP(row.identificador, codigo)
-                .then((result) => {
-                    return DB.update({
-                            estatus: "verificado"
-                        }, DB.table.OTP, `id='${row.id}'`)
+            req.Log(`DB`, `Actualizado registro id: ${row.id}`);
+            return Nufi.validarOTP(row.identificador, codigo, req)
+                .then((otp) => {
+                    return DB.update({estatus: "verificado"}, DB.table.OTP, `id='${row.id}'`);
                 });
         })
         .then( updated => {
+            req.Log(`DB`, `Registro actualizado`);
             res.response("success", "OTP verificado", null, 200);
         })
         .catch((err) => {
@@ -224,7 +255,7 @@ api.post("/validar_otp", obtenerRegistro, function(req, res) {
 function obtenerRegistro(req, res, next){
     const uuid = req.headers.uuid;
 
-    DB.query(`SELECT id, nombre, apellido_paterno, apellido_materno, fecha_nacimiento, sexo, lugar_de_nacimiento, curp, rfc, numero, correo, estatus, json_ocr_frente, json_curp, json_rfc FROM ${DB.table.REGISTROS} WHERE uuid='${uuid}'`)
+    DB.query(`SELECT id, nombre, apellido_paterno, apellido_materno, fecha_nacimiento, sexo, lugar_de_nacimiento, curp, rfc, numero, correo, calle, colonia, municipio, estado, numero_exterior, numero_interior, estatus, json_ocr_frente, json_curp, json_rfc FROM ${DB.table.REGISTROS} WHERE uuid='${uuid}'`)
         .then((rows) => {
             if(rows.length == 0) return res.response("error", "Error al obtener registro", null, 404);
             req.user = rows[0];
