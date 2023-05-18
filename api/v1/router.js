@@ -5,16 +5,15 @@ const express = require("express"),
     {v1: uuidv1 } = require('uuid'),
     Utilities = require("./utils/Utilities"),
     DB = require("./utils/DB"),
-    ocr = require("./controllers/ocr"),
-    otp = require("./controllers/otp"),
     registro = require("./controllers/registro");
 
 api.all("*", function(req, res, next) {
     req.request_time = moment().utc();
     req.request_id = req.request_time.format("YYYYMMDDHHmmss") + "_"+ uuidv1();
     req.log = [];
-    req.Log = (text, object = null) => {
-        req.log.push(`${moment().format("DD/MM/YYYY HH:mm:ss:SSS")} ${text}${object ? " > " + JSON.stringify(object) : ""}`);
+    req.Log = (text, object = "") => {
+        req.log.push(`${moment().format("DD/MM/YYYY HH:mm:ss:SSS")} ${text}${typeof object == "object" ? " > " + JSON.stringify(object) : (object ? " > " + object : "")}`);
+        //console.log(`${moment().format("DD/MM/YYYY HH:mm:ss:SSS")} ${text}${typeof object == "object" ? " > " + JSON.stringify(object) : (object ? " > " + object : "")}`);
         //fs.appendFileSync('log.txt', `${moment().format("DD/MM/YYYY HH:mm:ss:SSS")} ${text}${object ? " > " + JSON.stringify(object) : ""}\n`);
         return null; //Importante
     }
@@ -57,7 +56,6 @@ api.all("*", function(req, res, next) {
         next();
     })
     .catch((err) => {
-        console.log(err);
         req.Log(`Error al insertar log registro log: ${err.message || err}`);
         res.response("error", "Error al recibir petición", null, 400);
     });
@@ -67,8 +65,6 @@ api.get("/", function(req, res) {
     res.send(`API ${process.env.APP_NAME} ${process.env.VERSION}`);
 });
 
-api.use("/ocr", ocr);
-api.use("/otp", otp);
 api.use("/registro", registro);
 
 module.exports = api;
