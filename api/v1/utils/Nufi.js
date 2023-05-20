@@ -1,14 +1,15 @@
 const request = require('request'),
     moment = require("moment"),
-    NUFI_URL = process.env.NUFI_URL,
     APP_NAME = process.env.APP_NAME,
-    NUFI_API_KEY = process.env.NUFI_API_KEY;
+    NUFI_API_KEY = process.env.NUFI_API_KEY,
+    NUFI_URL = process.env.NUFI_URL,
+    OCR_URL = `http://ocrinenufi001.southcentralus.cloudapp.azure.com:3002/api/v1/`;
 
 module.exports = {
 	INEfrente: function(base64, req){
 		req.Log(`INE Frente`, `Inicia consumo de servicio`);
 		return new Promise((resolve, reject) => {
-			POST(`ocr/v1/frente`, {base64_credencial_frente: base64})
+			POST(`${NUFI_URL}ocr/v1/frente`, {base64_credencial_frente: base64})
 			    .then( result => {
 					req.Log(`INE Frente`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
@@ -23,7 +24,7 @@ module.exports = {
 	INEreverso: function(base64, req){
 		req.Log(`INE Reverso`, `Inicia consumo de servicio`);
 		return new Promise((resolve, reject) => {
-			POST(`ocr/v1/reverso`, {base64_credencial_reverso: base64})
+			POST(`${NUFI_URL}ocr/v1/reverso`, {base64_credencial_reverso: base64})
 			    .then( result => {
 					req.Log(`INE Reverso`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
@@ -51,7 +52,7 @@ module.exports = {
 
 		req.Log(`Calcular CURP`, `Inicia consumo de servicio ${JSON.stringify(data)}`);
 		return new Promise((resolve, reject) => {
-			POST(`curp/v1/consulta`, data)
+			POST(`${NUFI_URL}curp/v1/consulta`, data)
 			    .then( result => {
 					req.Log(`Calcular CURP`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
@@ -74,7 +75,7 @@ module.exports = {
 
 		req.Log(`Calcular RFC`, `Inicia consumo de servicio: ${JSON.stringify(data)}`);
 		return new Promise((resolve, reject) => {
-			POST(`api/v1/calcular_rfc`, data)
+			POST(`${NUFI_URL}api/v1/calcular_rfc`, data)
 			    .then( result => {
 					req.Log(`Calcular RFC`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
@@ -96,7 +97,7 @@ module.exports = {
 
 		req.Log(`Envio OTP`, `Inicia consumo de servicio ${JSON.stringify(data)}`);
 		return new Promise((resolve, reject) => {
-			POST(`otp/v2/enviar`, data)
+			POST(`${NUFI_URL}otp/v2/enviar`, data)
 			    .then( result => {
 					req.Log(`Envio OTP`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
@@ -116,7 +117,7 @@ module.exports = {
 
 		req.Log(`Validar OTP`, `Inicia consumo de servicio ${JSON.stringify(data)}`);
 		return new Promise((resolve, reject) => {
-			POST(`otp/v2/validar`, data)
+			POST(`${NUFI_URL}otp/v2/validar`, data)
 			    .then( result => {
 					req.Log(`Validar OTP`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
@@ -131,9 +132,7 @@ module.exports = {
 }
 
 
-function POST(endpoint, body){
-	const url = `${NUFI_URL}${endpoint}`;
-
+function POST(url, body){
     return new Promise((resolve, reject) => {
         request({
             url: url,
