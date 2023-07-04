@@ -9,7 +9,7 @@ module.exports = {
 	INEfrente: function(base64, req){
 		req.Log(`INE Frente`, `Inicia consumo de servicio`);
 		return new Promise((resolve, reject) => {
-			POST(`${NUFI_URL}ocr/v1/frente`, {base64_credencial_frente: base64})
+			POST(`${NUFI_URL}ocr/v4/frente`, {base64_credencial_frente: base64})
 			    .then( result => {
 					req.Log(`INE Frente`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
