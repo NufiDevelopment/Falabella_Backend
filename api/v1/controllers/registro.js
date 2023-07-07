@@ -8,27 +8,35 @@ const api = require("express").Router(),
     CATALOGO_SEXO = {'H':'Hombre', 'M': 'Mujer'},
     CATALOGO_ESTADO = {'AS': 'Aguascalientes', 'BC': 'Baja California', 'BS': 'Baja California Sur', 'CC': 'Campeche', 'CL': 'Coahuila de Zaragoza', 'CM': 'Colima', 'CS': 'Chiapas', 'CH': 'Chihuahua', 'DF': 'Distrito Federal', 'DG': 'Durango', 'GT': 'Guanajuato', 'GR': 'Guerrero', 'HG': 'Hidalgo', 'JC': 'Jalisco', 'MC': 'México', 'MN': 'Michoacán de Ocampo', 'MS': 'Morelos', 'NT': 'Nayarit', 'NL': 'Nuevo León', 'OC': 'Oaxaca', 'PL': 'Puebla', 'QT': 'Querétaro', 'QR': 'Quintana Roo', 'SP': 'San Luis Potosí', 'SL': 'Sinaloa', 'SR': 'Sonora', 'TC': 'Tabasco', 'TS': 'Tamaulipas', 'TL': 'Tlaxcala', 'VZ': 'Veracruz de Ignacio de la Llave', 'YN': 'Yucatán', 'ZS': 'Zacatecas'};
     
-api.post("/crear", function(req, res) {
+api.post("/crear", telefonoValido, function(req, res) {
     const numero = req.body.numero || "",
         correo = req.body.correo || "",
         uuid = uuidv1();
+        
+        let telefonoValido = req.telefonoValido;
 
-    req.Log(`Crear Registro (DB)`, `Insertando registro`);
-    DB.insert({
-            uuid: uuid,
-            fecha_creacion: moment().utc().format("YYYY-MM-DD HH:mm:ss"),
-            numero: numero,
-            correo: correo,
-            estatus: "registrado"
-        }, DB.table.REGISTROS)
-        .then((id) => {
-            req.Log(`Crear Registro (DB)`, `Registro insertado con id: ${id}`);
-            res.response("success", "Registro insertado", {uuid}, 200);
-        })
-        .catch((err) => {
-            req.Log(`Crear Registro (DB) Error`, err.message || err);
-            res.response("error", `Error al crear registro, porfavor intentelo nuevamente.`, null, 400);
-        });
+        if(telefonoValido){
+
+            req.Log(`Crear Registro (DB)`, `Insertando registro`);
+            DB.insert({
+                    uuid: uuid,
+                    fecha_creacion: moment().utc().format("YYYY-MM-DD HH:mm:ss"),
+                    numero: numero,
+                    correo: correo,
+                    estatus: "registrado"
+                }, DB.table.REGISTROS)
+                .then((id) => {
+                    req.Log(`Crear Registro (DB)`, `Registro insertado con id: ${id}`);
+                    res.response("success", "Registro insertado", {uuid}, 200);
+                })
+                .catch((err) => {
+                    req.Log(`Crear Registro (DB) Error`, err.message || err);
+                    res.response("error", `Error al crear registro, porfavor intentelo nuevamente.`, null, 400);
+                });
+        }
+        else{
+            res.response("error", `Télefono previamente registrado.`, {telefonoValido}, 400);
+        }
 });
 
 api.post("/evento", obtenerRegistro, function(req, res) {
@@ -152,25 +160,32 @@ api.post("/datos_personales", obtenerRegistro, function(req, res) {
         });
 });
 
-api.post("/curp_rfc", obtenerRegistro, function(req, res) {
+api.post("/curp_rfc", obtenerRegistro, curpValido, function(req, res) {
     const { curp, rfc }  = req.body;
     if(!curp) return res.response("error", "Campo curp requerido", null);
     if(!rfc) return res.response("error", "Campo rfc requerido", null);
     
-    req.Log(`DB`, `Actualizando registro con id: ${req.user.id}`);
-    DB.update({
-            curp: curp,
-            rfc: rfc,
-            estatus: "curp_rfc_validado"
-        }, DB.table.REGISTROS, `id=${req.user.id}`)
-        .then( updated => {
-            req.Log(`DB`, `Registro actualizado`);
-            res.response("success", "Datos actualizados", null, 200);
-        })
-        .catch((err) => {
-            req.Log(`DB Error`, err.message || err);
-            res.response("error", err.message || err, null, 400);
-        });
+    let curpValido = req.curpValido;
+
+    if(curpValido){
+        req.Log(`DB`, `Actualizando registro con id: ${req.user.id}`);
+        DB.update({
+                curp: curp,
+                rfc: rfc,
+                estatus: "curp_rfc_validado"
+            }, DB.table.REGISTROS, `id=${req.user.id}`)
+            .then( updated => {
+                req.Log(`DB`, `Registro actualizado`);
+                res.response("success", "Datos actualizados", null, 200);
+            })
+            .catch((err) => {
+                req.Log(`DB Error`, err.message || err);
+                res.response("error", err.message || err, null, 400);
+            });
+        }
+        else{
+            res.response("error", `Curp previamente registrado.`, {curpValido}, 400);
+        }
 });
 
 api.post("/domicilio", obtenerRegistro, function(req, res) {
@@ -241,6 +256,9 @@ api.post("/validar_otp", obtenerRegistro, function(req, res) {
             return Nufi.validarOTP(row.identificador, codigo, req)
                 .then((otp) => {
                     return DB.update({estatus: "verificado"}, DB.table.OTP, `id='${row.id}'`);
+                })
+                .then((otp) => {
+                    return DB.update({procesoTerminado: 1}, DB.table.REGISTROS, `id='${row.registro}'`);
                 });
         })
         .then( updated => {
@@ -259,6 +277,40 @@ function obtenerRegistro(req, res, next){
         .then((rows) => {
             if(rows.length == 0) return res.response("error", "Error al obtener registro", null, 404);
             req.user = rows[0];
+            next();
+        })
+        .catch((err) => {
+            res.response("error", err.message || err, null, 400);
+        });
+}
+
+function telefonoValido(req, res, next){    
+
+    const numero = req.body.numero || "";
+
+    if(numero === "") res.response("error", "Número no valido" , null, 400);
+
+    DB.query(`SELECT id FROM ${DB.table.REGISTROS} WHERE numero='${numero}' AND ProcesoTerminado = 1`)
+        .then((rows) => {
+            if(rows.length == 0) req.telefonoValido = true;
+            else req.telefonoValido = false;;
+            next();
+        })
+        .catch((err) => {
+            res.response("error", err.message || err, null, 400);
+        });
+}
+
+function curpValido(req, res, next){    
+
+    const { curp, rfc }  = req.body;
+
+    if(curp === "") res.response("error", "curp no valido" , null, 400);
+
+    DB.query(`SELECT id FROM ${DB.table.REGISTROS} WHERE curp='${curp}' AND ProcesoTerminado = 1`)
+        .then((rows) => {
+            if(rows.length == 0) req.curpValido = true;
+            else req.curpValido = false;;
             next();
         })
         .catch((err) => {
