@@ -56,7 +56,7 @@ module.exports = {
 			    .then( result => {
 					req.Log(`Calcular CURP`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
-			        reject("Los datos ingresados no son correctos para validar su curp, porfavor ingreselos correctamente.");
+			        reject("Los datos ingresados no son correctos para validar su CURP, porfavor ingreselos correctamente.");
 			    })
 			    .catch( err => {
 					req.Log(`Calcular CURP`, err.messsage || err);
@@ -101,7 +101,8 @@ module.exports = {
 			    .then( result => {
 					req.Log(`Envio OTP`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
-			        reject(`Error al enviar verificación OTP: ${result.message}`);
+			        // reject(`Error al enviar verificación OTP: ${result.message}`);
+					reject(`Se puede envíar un código cada 5 minutos, intentelo mas tarde`);
 			    })
 			    .catch( err => {
 					req.Log(`Envio OTP`, err.messsage || err);
