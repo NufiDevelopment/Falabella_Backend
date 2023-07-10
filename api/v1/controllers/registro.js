@@ -219,30 +219,36 @@ api.post("/domicilio", obtenerRegistro, function(req, res) {
         });
 });
 
-api.post("/enviar_otp", obtenerRegistro, function(req, res) {
-    Nufi.enviarOTP(req.user.numero, req)
-        .then((otp) => {
-            req.Log(`DB`, `Insertar registro ${JSON.stringify(otp)}`);
-            return DB.insert({
-                    fecha_creacion: moment().utc().format("YYYY-MM-DD HH:mm:ss"),
-                    identificador: otp.identificador,
-                    registro: req.user.id,
-                    numero: req.user.numero,
-                    estatus: "sin_verificar"
-                }, DB.table.OTP)
-        })
-        .then( id => {
-            req.Log(`DB`, `Registro insertado con id: ${id}`);
-            res.response("success", "OTP enviado", null, 200);
-        })
-        .catch((err) => {
-            req.Log(`DB`, `Error al actualizar registro: ${err.message || err}`);
-            res.response("error", err.message || err, null, 400);
-        });
+api.post("/enviar_otp", obtenerRegistro, tieneIntentosRestantes, function(req, res) {
+
+    if(req.intentosPendientes){
+        Nufi.enviarOTP(req.user.numero, req)
+            .then((otp) => {
+                req.Log(`DB`, `Insertar registro ${JSON.stringify(otp)}`);
+                return DB.insert({
+                        fecha_creacion: moment().utc().format("YYYY-MM-DD HH:mm:ss"),
+                        identificador: otp.identificador,
+                        registro: req.user.id,
+                        numero: req.user.numero,
+                        estatus: "sin_verificar"
+                    }, DB.table.OTP)
+            })
+            .then( id => {
+                req.Log(`DB`, `Registro insertado con id: ${id}`);
+                res.response("success", "OTP enviado", null, 200);
+            })
+            .catch((err) => {
+                req.Log(`DB`, `Error al actualizar registro: ${err.message || err}`);
+                res.response("error", err.message || err, null, 400);
+            });
+    }
+    else{
+        res.response("error", "Ha pasado el número maximo de intentos(3), intentelo mas tardes", null, 400);
+    }
 });
 
 
-api.post("/validar_otp", obtenerRegistro, function(req, res) {
+api.post("/validar_otp", obtenerRegistro,  function(req, res) {
     const { codigo }  = req.body;
     if(!codigo) return res.response("error", "Campo codigo requerido", null);
 
@@ -317,5 +323,19 @@ function curpValido(req, res, next){
             res.response("error", err.message || err, null, 400);
         });
 }
+
+function tieneIntentosRestantes(req, res, next){
+
+    DB.query(`SELECT count(id) counted FROM ${DB.table.OTP} WHERE registro='${req.user.id}' `)
+        .then((rows) => {
+            if(rows[0].counted >= 3) req.intentosPendientes = false;
+            else req.intentosPendientes = true;;
+            next();
+        })
+        .catch((err) => {
+            res.response("error", err.message || err, null, 400);
+        });
+}
+
 
 module.exports = api;
