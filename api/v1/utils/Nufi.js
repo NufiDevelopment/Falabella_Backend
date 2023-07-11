@@ -64,6 +64,26 @@ module.exports = {
 			    });
 		})
 	},
+	validaCURP: function(curp, req){
+		let data = {
+			  	"tipo_busqueda": "curp",
+			  	"curp": curp			  	
+			};
+
+		req.Log(`validar CURP`, `Inicia consumo de servicio ${JSON.stringify(data)}`);
+		return new Promise((resolve, reject) => {
+			POST(`${NUFI_URL}curp/v1/consulta`, data)
+			    .then( result => {
+					req.Log(`Calcular CURP`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
+			    	if(result.status == "success") return resolve(result.data);
+			        reject("CURP no pudo ser validada");
+			    })
+			    .catch( err => {
+					req.Log(`Calcular CURP`, err.messsage || err);
+			        reject(err);
+			    });
+		})
+	},
 	calcularRFC: function(nombre, apellido_paterno, apellido_materno, fecha_nacimiento, req){
 		let fecha_nacimiento_date = moment(fecha_nacimiento, "YYYY-MM-DD"),
 			data = {
@@ -83,6 +103,25 @@ module.exports = {
 			    })
 			    .catch( err => {
 					req.Log(`Calcular RFC`, err.messsage || err);
+			        reject(err);
+			    });
+		});
+	},
+	validarRFC: function(rfc, req){
+		let data = {
+			  	"rfc": rfc
+			};
+
+		req.Log(`Calcular RFC`, `Inicia consumo de servicio: ${JSON.stringify(data)}`);
+		return new Promise((resolve, reject) => {
+			POST(`${NUFI_URL}estatusrfc/valida`, data)
+			    .then( result => {
+					req.Log(`Validar RFC`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
+			    	if(result.status == "success") return resolve(result.data);
+			        reject("RFC no pudo ser validado.");
+			    })
+			    .catch( err => {
+					req.Log(`Validar RFC`, err.messsage || err);
 			        reject(err);
 			    });
 		});
