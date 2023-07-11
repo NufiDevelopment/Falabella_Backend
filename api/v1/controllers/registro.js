@@ -11,6 +11,11 @@ const api = require("express").Router(),
 api.post("/crear", telefonoValido, function(req, res) {
     const numero = req.body.numero || "",
         correo = req.body.correo || "",
+        utm_source = req.body.utm_source || "",
+        utm_medium = req.body.utm_medium || "",
+        utm_campaign = req.body.utm_campaign || "",
+        utm_term = req.body.utm_term || "",
+        utm_content = req.body.utm_content || "",
         uuid = uuidv1();
         
         let telefonoValido = req.telefonoValido;
@@ -23,7 +28,12 @@ api.post("/crear", telefonoValido, function(req, res) {
                     fecha_creacion: moment().utc().format("YYYY-MM-DD HH:mm:ss"),
                     numero: numero,
                     correo: correo,
-                    estatus: "registrado"
+                    estatus: "registrado",
+                    utm_source: utm_source,
+                    utm_medium: utm_medium,
+                    utm_campaign: utm_campaign,
+                    utm_term: utm_term,
+                    utm_content: utm_content
                 }, DB.table.REGISTROS)
                 .then((id) => {
                     req.Log(`Crear Registro (DB)`, `Registro insertado con id: ${id}`);
@@ -147,7 +157,9 @@ api.post("/datos_personales", obtenerRegistro, function(req, res) {
                     lugar_de_nacimiento: estado,
                     estatus: "curp_rfc",
                     json_curp: Utilities.LimitarLogDB(curp_data, 1000),
-                    json_rfc: Utilities.LimitarLogDB(rfc_data, 1000)
+                    json_rfc: Utilities.LimitarLogDB(rfc_data, 1000),
+                    curp_calculado: curp_data?.curpdata?.[0]?.curp,
+                    rfc_calculado: rfc_data?.rfc,
                 }, DB.table.REGISTROS, `id=${req.user.id}`)
         })
         .then( updated => {
@@ -168,24 +180,56 @@ api.post("/curp_rfc", obtenerRegistro, curpValido, function(req, res) {
     let curpValido = req.curpValido;
 
     if(curpValido){
-        req.Log(`DB`, `Actualizando registro con id: ${req.user.id}`);
-        DB.update({
-                curp: curp,
-                rfc: rfc,
-                estatus: "curp_rfc_validado"
-            }, DB.table.REGISTROS, `id=${req.user.id}`)
-            .then( updated => {
-                req.Log(`DB`, `Registro actualizado`);
-                res.response("success", "Datos actualizados", null, 200);
+
+        if(curp !== req.user.curp_calculado || rfc !== req.user.rfc_calculado){
+            Nufi.validaCURP(curp, req)
+            .then((curp_data) => {
+                return Nufi.validarRFC(rfc, req)
+                    .then((rfc_data) => {
+                        return [curp_data, rfc_data];
+                    });
+            })
+            .then( ([curp_data, rfc_data]) => {
+                req.Log(`DB`, `Actualizando registro con id: ${req.user.id}`);
+                DB.update({
+                        curp: curp,
+                        rfc: rfc,
+                        estatus: "curp_rfc_validado"
+                    }, DB.table.REGISTROS, `id=${req.user.id}`)
+                    .then( updated => {
+                        req.Log(`DB`, `Registro actualizado`);
+                        res.response("success", "Datos actualizados", null, 200);
+                    })
+                    .catch((err) => {
+                        req.Log(`DB Error`, err.message || err);
+                        res.response("error", err.message || err, null, 400);
+                    });
             })
             .catch((err) => {
-                req.Log(`DB Error`, err.message || err);
+                req.Log(`Error en validación`, err.message || err);
                 res.response("error", err.message || err, null, 400);
             });
         }
-        else{
-            res.response("error", `Curp previamente registrado.`, {curpValido}, 400);
+        else{// optimizar para evitar tanto IF
+            req.Log(`DB`, `Actualizando registro con id: ${req.user.id}`);
+            DB.update({
+                    curp: curp,
+                    rfc: rfc,
+                    estatus: "curp_rfc_validado"
+                }, DB.table.REGISTROS, `id=${req.user.id}`)
+                .then( updated => {
+                    req.Log(`DB`, `Registro actualizado`);
+                    res.response("success", "Datos actualizados", null, 200);
+                })
+                .catch((err) => {
+                    req.Log(`DB Error`, err.message || err);
+                    res.response("error", err.message || err, null, 400);
+                });
         }
+    }
+    else{
+        res.response("error", `Curp previamente registrado.`, {curpValido}, 400);
+    }
 });
 
 api.post("/domicilio", obtenerRegistro, function(req, res) {
@@ -279,7 +323,7 @@ api.post("/validar_otp", obtenerRegistro,  function(req, res) {
 function obtenerRegistro(req, res, next){
     const uuid = req.headers.uuid;
 
-    DB.query(`SELECT id, nombre, apellido_paterno, apellido_materno, fecha_nacimiento, sexo, lugar_de_nacimiento, curp, rfc, numero, correo, calle, colonia, municipio, estado, numero_exterior, numero_interior, estatus, json_ocr_frente, json_curp, json_rfc FROM ${DB.table.REGISTROS} WHERE uuid='${uuid}'`)
+    DB.query(`SELECT id, nombre, apellido_paterno, apellido_materno, fecha_nacimiento, sexo, lugar_de_nacimiento, curp, rfc, numero, correo, calle, colonia, municipio, estado, numero_exterior, numero_interior, estatus, json_ocr_frente, json_curp, json_rfc, curp_calculado, rfc_calculado FROM ${DB.table.REGISTROS} WHERE uuid='${uuid}'`)
         .then((rows) => {
             if(rows.length == 0) return res.response("error", "Error al obtener registro", null, 404);
             req.user = rows[0];
@@ -308,6 +352,23 @@ function telefonoValido(req, res, next){
 }
 
 function curpValido(req, res, next){    
+
+    const { curp, rfc }  = req.body;
+
+    if(curp === "") res.response("error", "curp no valido" , null, 400);
+
+    DB.query(`SELECT id FROM ${DB.table.REGISTROS} WHERE curp='${curp}' AND ProcesoTerminado = 1`)
+        .then((rows) => {
+            if(rows.length == 0) req.curpValido = true;
+            else req.curpValido = false;;
+            next();
+        })
+        .catch((err) => {
+            res.response("error", err.message || err, null, 400);
+        });
+}
+
+function validarCurpRFC(req, res, next){    
 
     const { curp, rfc }  = req.body;
 
