@@ -9,7 +9,7 @@ module.exports = {
 	INEfrente: function(base64, req){
 		req.Log(`INE Frente`, `Inicia consumo de servicio`);
 		return new Promise((resolve, reject) => {
-			POST(`${NUFI_URL}ocr/v1/frente`, {base64_credencial_frente: base64})
+			POST(`${NUFI_URL}ocr/v4/frente`, {base64_credencial_frente: base64})
 			    .then( result => {
 					req.Log(`INE Frente`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
@@ -56,7 +56,27 @@ module.exports = {
 			    .then( result => {
 					req.Log(`Calcular CURP`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
-			        reject("Los datos ingresados no son correctos para validar su curp, porfavor ingreselos correctamente.");
+			        reject("Los datos ingresados no son correctos para validar su CURP, porfavor ingreselos correctamente.");
+			    })
+			    .catch( err => {
+					req.Log(`Calcular CURP`, err.messsage || err);
+			        reject(err);
+			    });
+		})
+	},
+	validaCURP: function(curp, req){
+		let data = {
+			  	"tipo_busqueda": "curp",
+			  	"curp": curp			  	
+			};
+
+		req.Log(`validar CURP`, `Inicia consumo de servicio ${JSON.stringify(data)}`);
+		return new Promise((resolve, reject) => {
+			POST(`${NUFI_URL}curp/v1/consulta`, data)
+			    .then( result => {
+					req.Log(`Calcular CURP`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
+			    	if(result.status == "success") return resolve(result.data);
+			        reject("CURP no pudo ser validada");
 			    })
 			    .catch( err => {
 					req.Log(`Calcular CURP`, err.messsage || err);
@@ -87,6 +107,25 @@ module.exports = {
 			    });
 		});
 	},
+	validarRFC: function(rfc, req){
+		let data = {
+			  	"rfc": rfc
+			};
+
+		req.Log(`Calcular RFC`, `Inicia consumo de servicio: ${JSON.stringify(data)}`);
+		return new Promise((resolve, reject) => {
+			POST(`${NUFI_URL}estatusrfc/valida`, data)
+			    .then( result => {
+					req.Log(`Validar RFC`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
+			    	if(result.status == "success") return resolve(result.data);
+			        reject("RFC no pudo ser validado.");
+			    })
+			    .catch( err => {
+					req.Log(`Validar RFC`, err.messsage || err);
+			        reject(err);
+			    });
+		});
+	},
 	enviarOTP: function(phone, req){
 		let data = {
 			  	"numero": phone,
@@ -101,7 +140,8 @@ module.exports = {
 			    .then( result => {
 					req.Log(`Envio OTP`, `Respuesta de servicio, estatus: ${result.status || ""}, message: ${result.message}`);
 			    	if(result.status == "success") return resolve(result.data);
-			        reject(`Error al enviar verificación OTP: ${result.message}`);
+			        // reject(`Error al enviar verificación OTP: ${result.message}`);
+					reject(`Se puede envíar un código cada 5 minutos, intentelo mas tarde`);
 			    })
 			    .catch( err => {
 					req.Log(`Envio OTP`, err.messsage || err);
