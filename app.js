@@ -6,7 +6,16 @@ const config = require("./config"),
     cors = require("cors"),
     helmet = require('helmet');
 
-app.use(helmet());
+//app.use(helmet());
+app.use(
+    helmet.contentSecurityPolicy({
+        directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "script-src": ["'self'", "*.googletagmanager.com", "*.google-analytics.com"],
+            "default-src": ["'self'", "*.googletagmanager.com", "*.google-analytics.com"]
+        },
+    })
+);
 app.use(helmet.frameguard({ action: 'deny' }));
 app.disable('x-powered-by');
 app.use(cors());
